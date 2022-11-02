@@ -14,10 +14,11 @@ app = Flask(__name__)
 cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 #app.config['CORS_HEADERS'] = 'Content-Type'
 
-@app.route('/api/hello_world', methods=['GET'])
+@app.route('/api/hello_world/', methods=['POST'])
 @cross_origin()
-def return_hello_world():
-    return hello_world.hello_world()
+def return_hello_worldn():
+    body=request.json
+    return hello_world.hello_world(body['FEN'])
 
 
 @app.route('/api/operations/multiplicate/<parameters>', methods=['GET'])
