@@ -4,6 +4,7 @@ import json
 import torch 
 import numpy as np 
 import math
+import chess
 
 def get_moves_dict():
     letters=list('abcdefgh')
@@ -197,6 +198,10 @@ stockfish = Stockfish()
 tokenizer=Tokenizer()
 
 def hello_world(fen_postion):
+
+    MAX_LENGTH_VALID_MOVES=100
+
+
     # set initial position from FEN 
     stockfish.set_fen_position(fen_postion)
     moves_dict,inv_moves_dict = get_moves_dict()
@@ -206,10 +211,43 @@ def hello_world(fen_postion):
     transformer=TransformerClassifier(vocab_size_fens=tokenizer.vocab_size,n_moves=len(moves_dict.keys()),
                                   #d_model=(len(moves_dict.keys()) -2)//2, 
                                   n_labels=len(moves_dict.keys()), dim_feedforward=(len(moves_dict.keys())-2))
+    device = torch.device("cpu")
+    transformer.to(device)
 
+    transformer.load_state_dict(torch.load('/Users/nicolasfelipevergaraduran/Documents/Computacion/NetworkAndesIA/RL_chess_engine/src/models/data_scientist/chess_transformer_v2.pth',map_location=device))
+    transformer.eval()
 
-    transformer.load_state_dict(torch.load('/Users/nicolasfelipevergaraduran/Documents/Computacion/NetworkAndesIA/RL_chess_engine/src/models/data_scientist/chess_transformer_v2.pth'))
+    ##Let's play 
     
+    with torch.no_grad():
+        ##Load the data 
 
-    return Response(json.dumps({'next_move':stockfish.get_best_move(), 'fen tokenized':tokenizer.detokenize(tokenizer.tokenize(fen_postion))}), mimetype='application/json')
+        batch_positions = tokenized_fen
+        mask_batch_positions=torch.BoolTensor([True if token ==322 else False for token in tokenized_fen])
+
+        ## Let's compute the legal moves for the position 
+        board = chess.Board()
+        board.set_fen(fen=fen_postion)
+        legal_moves=[move.uci() for move in board.legal_moves]
+        legal_moves=legal_moves+['end']*(MAX_LENGTH_VALID_MOVES-len(legal_moves))
+        target_input=torch.LongTensor([moves_dict[move] for move in legal_moves])
+        mask_target_input=torch.BoolTensor([True if token ==4273 else False for token in target_input])
+
+
+        target_input =target_input.to(device)
+        target_input =torch.reshape(target_input,(1,target_input.size()[0]))
+        mask_target = mask_target_input.to(device)
+        mask_target =torch.reshape(mask_target,(1,mask_target.size()[0]))
+        mask_input = mask_batch_positions.to(device)
+        mask_input =torch.reshape(mask_input,(1,mask_input.size()[0]))
+        input_id = batch_positions.to(device)
+        input_id=torch.reshape(input_id,(1,input_id.size()[0]))
+        output=transformer(input_id , mask_input,target_input,mask_target)
+
+        next_move=inv_moves_dict[torch.argmax(output).item()]
+        
+        if next_move not in legal_moves:
+            next_move=stockfish.get_best_move() 
+
+    return Response(json.dumps({'next_move':next_move, 'fen tokenized':tokenizer.detokenize(tokenizer.tokenize(fen_postion))}), mimetype='application/json')
 
